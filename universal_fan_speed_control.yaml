@@ -1,0 +1,348 @@
+blueprint:
+  name: Universal Fan Speed Control
+  description: >
+    Steuert Fan-Speed (Percentage oder Preset) basierend auf Raumtemperatur.
+    Unterstützt separate Profile für Kühlen und Heizen, Hysterese und
+    einen Enable/Disable-Toggle.
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+
+    # ── Entities ────────────────────────────────────────────────────────────
+    temp_sensor:
+      name: 🌡 Temperatursensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+
+    fan_entity:
+      name: 💨 Fan Entity
+      selector:
+        entity:
+          domain: fan
+
+    fan_control:
+      name: 🔘 Enable/Disable Toggle
+      description: >
+        input_boolean — wenn OFF läuft die Automation nicht.
+        In den Helpers anlegen.
+      selector:
+        entity:
+          domain: input_boolean
+
+    # ── Steuerungsmodus ──────────────────────────────────────────────────────
+    control_mode:
+      name: Steuerungsmodus
+      description: >
+        Percentage: fan.set_percentage (0–100%).
+        Preset: fan.set_preset_mode mit Named Presets.
+      default: percentage
+      selector:
+        select:
+          options:
+            - label: "Percentage (0–100%)"
+              value: percentage
+            - label: "Preset (Named Modes)"
+              value: preset
+
+    # ── Preset-Konfiguration ─────────────────────────────────────────────────
+    preset_ordered_list:
+      name: Preset-Reihenfolge (langsam → schnell)
+      description: >
+        Kommagetrennt, aufsteigend.
+        Beispiel: 1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus
+      default: "1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus"
+      selector:
+        text: {}
+
+    preset_min:
+      name: Niedrigster aktiver Preset
+      default: "1 - Diffuse"
+      selector:
+        text: {}
+
+    preset_max:
+      name: Höchster aktiver Preset
+      default: "5 - Focus"
+      selector:
+        text: {}
+
+    # ── Percentage-Konfiguration ─────────────────────────────────────────────
+    pct_min:
+      name: Minimale Fan-Speed (%)
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+
+    pct_max:
+      name: Maximale Fan-Speed (%)
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+
+    # ── Hysterese ────────────────────────────────────────────────────────────
+    temp_gap:
+      name: Hysterese
+      description: >
+        Puffer in Grad um die Zieltemperatur — verhindert zu häufiges Schalten.
+        Größer = träger, kleiner = reaktiver.
+      default: 1.0
+      selector:
+        number:
+          min: 0.0
+          max: 5.0
+          step: 0.1
+          unit_of_measurement: "°"
+          mode: slider
+
+    temp_off_offset:
+      name: Ausschalt-Offset
+      description: >
+        Negativer Offset auf die Ausschalt-Temperatur.
+        0 = Fan schaltet genau am Schwellwert aus.
+        -1 = Fan schaltet erst 1° unterhalb aus (verhindert Flapping).
+      default: 0
+      selector:
+        number:
+          min: -5.0
+          max: 0.0
+          step: 0.1
+          unit_of_measurement: "°"
+          mode: slider
+
+    # ── Kühlen-Profil ────────────────────────────────────────────────────────
+    cool_enabled:
+      name: 🧊 Kühlen aktivieren
+      default: true
+      selector:
+        boolean: {}
+
+    cool_temp_min:
+      name: Kühlen – Temperatur für minimale Speed
+      default: 23
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    cool_temp_max:
+      name: Kühlen – Temperatur für maximale Speed
+      default: 30
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    cool_temp_off:
+      name: Kühlen – Ausschalt-Temperatur
+      description: Unter dieser Temperatur wird der Fan ausgeschaltet.
+      default: 22
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    # ── Heizen-Profil ────────────────────────────────────────────────────────
+    heat_enabled:
+      name: 🔥 Heizen aktivieren
+      default: false
+      selector:
+        boolean: {}
+
+    heat_temp_max:
+      name: Heizen – Temperatur für minimale Speed
+      description: Oberhalb → Fan auf Minimum.
+      default: 21
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    heat_temp_min:
+      name: Heizen – Temperatur für maximale Speed
+      description: Darunter → Fan auf Maximum.
+      default: 16
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    heat_temp_off:
+      name: Heizen – Ausschalt-Temperatur
+      description: Über dieser Temperatur wird der Fan ausgeschaltet.
+      default: 22
+      selector:
+        number:
+          min: 10.0
+          max: 40.0
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+
+    # ── Allgemein ────────────────────────────────────────────────────────────
+    update_interval:
+      name: ⏱ Mindestzeit zwischen Anpassungen
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: "min"
+          mode: slider
+
+# ── Variablen ─────────────────────────────────────────────────────────────────
+variables:
+  temp_sensor: !input temp_sensor
+  fan_entity: !input fan_entity
+  control_mode: !input control_mode
+
+  cool_enabled: !input cool_enabled
+  cool_temp_min: !input cool_temp_min
+  cool_temp_max: !input cool_temp_max
+  cool_temp_off: !input cool_temp_off
+
+  heat_enabled: !input heat_enabled
+  heat_temp_min: !input heat_temp_min
+  heat_temp_max: !input heat_temp_max
+  heat_temp_off: !input heat_temp_off
+
+  pct_min: !input pct_min
+  pct_max: !input pct_max
+
+  preset_ordered_list: !input preset_ordered_list
+  preset_min: !input preset_min
+  preset_max: !input preset_max
+
+  temp_gap: !input temp_gap
+  temp_off_offset: !input temp_off_offset
+
+  current_temp: "{{ states(temp_sensor) | float(0) }}"
+
+  preset_array: "{{ preset_ordered_list.split(',') | map('trim') | list }}"
+  idx_min: >
+    {% set arr = preset_array %}
+    {{ arr.index(preset_min) if preset_min in arr else 0 }}
+  idx_max: >
+    {% set arr = preset_array %}
+    {{ arr.index(preset_max) if preset_max in arr else (arr | length) - 1 }}
+
+  # Aktives Profil — Hysterese wird auf off-Schwellwert angewendet
+  active_profile: >
+    {% set t = current_temp %}
+    {% if cool_enabled and t >= (cool_temp_off + temp_off_offset + temp_gap) %}
+      cool
+    {% elif heat_enabled and t <= (heat_temp_off - temp_off_offset - temp_gap) %}
+      heat
+    {% else %}
+      off
+    {% endif %}
+
+  ratio: >
+    {% if active_profile == 'cool' %}
+      {% set t = [[current_temp, cool_temp_min] | max, cool_temp_max] | min %}
+      {{ (t - cool_temp_min) / ((cool_temp_max - cool_temp_min) | float(1)) }}
+    {% elif active_profile == 'heat' %}
+      {% set t = [[current_temp, heat_temp_min] | max, heat_temp_max] | min %}
+      {{ 1 - (t - heat_temp_min) / ((heat_temp_max - heat_temp_min) | float(1)) }}
+    {% else %}
+      0
+    {% endif %}
+
+  target_pct: >
+    {{ (pct_min + ratio * (pct_max - pct_min)) | round(0) | int }}
+
+  target_preset: >
+    {% set arr = preset_array %}
+    {% set idx = (idx_min + ratio * (idx_max - idx_min)) | round(0) | int %}
+    {{ arr[idx] }}
+
+  needs_change: >
+    {% if active_profile == 'off' %}
+      {{ states(fan_entity) == 'on' }}
+    {% elif control_mode == 'percentage' %}
+      {{ (state_attr(fan_entity, 'percentage') | int(0)) != target_pct }}
+    {% else %}
+      {{ state_attr(fan_entity, 'preset_mode') != target_preset }}
+    {% endif %}
+
+# ── Trigger ───────────────────────────────────────────────────────────────────
+triggers:
+  - trigger: state
+    entity_id: !input temp_sensor
+  - trigger: state
+    entity_id: !input fan_entity
+    to: "on"
+  - trigger: state
+    entity_id: !input fan_control
+    to: "off"
+
+# ── Conditions ────────────────────────────────────────────────────────────────
+conditions:
+  - condition: state
+    entity_id: !input fan_control
+    state: "on"
+  - condition: template
+    value_template: "{{ needs_change }}"
+
+# ── Actions ───────────────────────────────────────────────────────────────────
+actions:
+  - delay:
+      minutes: !input update_interval
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ active_profile == 'off' }}"
+        sequence:
+          - action: fan.turn_off
+            target:
+              entity_id: !input fan_entity
+
+      - conditions:
+          - condition: template
+            value_template: "{{ control_mode == 'percentage' }}"
+        sequence:
+          - action: fan.set_percentage
+            target:
+              entity_id: !input fan_entity
+            data:
+              percentage: "{{ target_pct }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ control_mode == 'preset' }}"
+        sequence:
+          - action: fan.set_preset_mode
+            target:
+              entity_id: !input fan_entity
+            data:
+              preset_mode: "{{ target_preset }}"
+
+mode: restart
