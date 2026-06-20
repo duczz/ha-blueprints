@@ -1,4 +1,4 @@
-## 🏠 My collection of Home Assistant Blueprints.
+## 🏠 My collection of Home Assistant Blueprints
 
 <details>
 <summary>💨 Universal Fan Speed Control (Testing)</summary>
