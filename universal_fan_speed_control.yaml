@@ -2,13 +2,12 @@ blueprint:
   name: Universal Fan Speed Control
   description: >
     Steuert Fan-Speed (Percentage oder Preset) basierend auf Raumtemperatur.
-    Unterstützt separate Profile für Kühlen und Heizen, Hysterese und
-    einen Enable/Disable-Toggle.
+    Unterstützt separate Profile für Kühlen und Heizen, optionale Haupt-Entity,
+    6 manuelle Temperaturstufen und einen Enable/Disable-Toggle.
   domain: automation
   homeassistant:
     min_version: 2024.6.0
   input:
-
     # ── Entities ────────────────────────────────────────────────────────────
     temp_sensor:
       name: 🌡 Temperatursensor
@@ -32,6 +31,16 @@ blueprint:
         entity:
           domain: input_boolean
 
+    main_entity:
+      name: 🏠 Haupt-Entity (optional)
+      description: >
+        Optionale übergeordnete Entity (z.B. climate.*).
+        Wenn angegeben, läuft der Fan nur wenn diese Entity aktiv ist (nicht 'off').
+        Bei climate.* wird der Modus (cool/heat) automatisch für das Profil verwendet.
+      default:
+      selector:
+        entity: {}
+
     # ── Steuerungsmodus ──────────────────────────────────────────────────────
     control_mode:
       name: Steuerungsmodus
@@ -48,171 +57,343 @@ blueprint:
               value: preset
 
     # ── Preset-Konfiguration ─────────────────────────────────────────────────
-    preset_ordered_list:
-      name: Preset-Reihenfolge (langsam → schnell)
+    preset_section:
+      name: Preset-Konfiguration
+      icon: mdi:format-list-bulleted
+      collapsed: true
       description: >
-        Kommagetrennt, aufsteigend.
-        Beispiel: 1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus
-      default: "1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus"
-      selector:
-        text: {}
+        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5).
+        Logik: ab dieser Temperatur → Stufe aktiv (>=). Höchste passende Stufe gewinnt.
+        Leer lassen = automatische lineare Berechnung zwischen min/max Temperatur.
+      input:
+        preset_ordered_list:
+          name: Preset-Reihenfolge (langsam → schnell)
+          description: >
+            Kommagetrennt, aufsteigend.
+            Beispiel: 1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus
+          default: "1 - Diffuse, 2 - Low, 3 - Medium, 4 - High, 5 - Focus"
+          selector:
+            text: {}
 
-    preset_min:
-      name: Niedrigster aktiver Preset
-      default: "1 - Diffuse"
-      selector:
-        text: {}
+        preset_min:
+          name: Niedrigster aktiver Preset
+          default: "1 - Diffuse"
+          selector:
+            text: {}
 
-    preset_max:
-      name: Höchster aktiver Preset
-      default: "5 - Focus"
-      selector:
-        text: {}
+        preset_max:
+          name: Höchster aktiver Preset
+          default: "5 - Focus"
+          selector:
+            text: {}
+
+        preset_m1_temp:
+          name: "Manuelle Stufe 1 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m1_val:
+          name: "Manuelle Stufe 1 – Preset"
+          default: ""
+          selector:
+            text: {}
+
+        preset_m2_temp:
+          name: "Manuelle Stufe 2 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m2_val:
+          name: "Manuelle Stufe 2 – Preset"
+          default: ""
+          selector:
+            text: {}
+
+        preset_m3_temp:
+          name: "Manuelle Stufe 3 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m3_val:
+          name: "Manuelle Stufe 3 – Preset"
+          default: ""
+          selector:
+            text: {}
+
+        preset_m4_temp:
+          name: "Manuelle Stufe 4 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m4_val:
+          name: "Manuelle Stufe 4 – Preset"
+          default: ""
+          selector:
+            text: {}
+
+        preset_m5_temp:
+          name: "Manuelle Stufe 5 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m5_val:
+          name: "Manuelle Stufe 5 – Preset"
+          default: ""
+          selector:
+            text: {}
+
+        preset_m6_temp:
+          name: "Manuelle Stufe 6 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        preset_m6_val:
+          name: "Manuelle Stufe 6 – Preset"
+          default: ""
+          selector:
+            text: {}
 
     # ── Percentage-Konfiguration ─────────────────────────────────────────────
-    pct_min:
-      name: Minimale Fan-Speed (%)
-      default: 20
-      selector:
-        number:
-          min: 1
-          max: 100
-          step: 1
-          unit_of_measurement: "%"
-          mode: slider
+    percentage_section:
+      name: Percentage-Konfiguration
+      icon: mdi:percent
+      collapsed: true
+      description: >
+        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5).
+        Logik: ab dieser Temperatur → Stufe aktiv (>=). Höchste passende Stufe gewinnt.
+        Leer lassen = automatische lineare Berechnung zwischen min/max Temperatur.
+      input:
+        pct_min:
+          name: Minimale Fan-Speed (%)
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
 
-    pct_max:
-      name: Maximale Fan-Speed (%)
-      default: 100
-      selector:
-        number:
-          min: 1
-          max: 100
-          step: 1
-          unit_of_measurement: "%"
-          mode: slider
+        pct_max:
+          name: Maximale Fan-Speed (%)
+          default: 100
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+
+        pct_m1_temp:
+          name: "Manuelle Stufe 1 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m1_val:
+          name: "Manuelle Stufe 1 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
+
+        pct_m2_temp:
+          name: "Manuelle Stufe 2 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m2_val:
+          name: "Manuelle Stufe 2 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
+
+        pct_m3_temp:
+          name: "Manuelle Stufe 3 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m3_val:
+          name: "Manuelle Stufe 3 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
+
+        pct_m4_temp:
+          name: "Manuelle Stufe 4 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m4_val:
+          name: "Manuelle Stufe 4 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
+
+        pct_m5_temp:
+          name: "Manuelle Stufe 5 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m5_val:
+          name: "Manuelle Stufe 5 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
+
+        pct_m6_temp:
+          name: "Manuelle Stufe 6 – Temperatur (°C)"
+          default: ""
+          selector:
+            text: {}
+        pct_m6_val:
+          name: "Manuelle Stufe 6 – Fan-Speed (%)"
+          default: ""
+          selector:
+            text: {}
 
     # ── Hysterese ────────────────────────────────────────────────────────────
-    temp_gap:
+    hysteresis_section:
       name: Hysterese
-      description: >
-        Puffer in Grad um die Zieltemperatur — verhindert zu häufiges Schalten.
-        Größer = träger, kleiner = reaktiver.
-      default: 1.0
-      selector:
-        number:
-          min: 0.0
-          max: 5.0
-          step: 0.1
-          unit_of_measurement: "°"
-          mode: slider
+      icon: mdi:thermometer-lines
+      collapsed: true
+      input:
+        hysteresis_enabled:
+          name: Hysterese aktivieren
+          description: >
+            Wenn deaktiviert werden temp_gap und Ausschalt-Offset ignoriert.
+            Empfohlen wenn eine Haupt-Entity (z.B. climate.*) angegeben ist.
+          default: true
+          selector:
+            boolean: {}
 
-    temp_off_offset:
-      name: Ausschalt-Offset
-      description: >
-        Negativer Offset auf die Ausschalt-Temperatur.
-        0 = Fan schaltet genau am Schwellwert aus.
-        -1 = Fan schaltet erst 1° unterhalb aus (verhindert Flapping).
-      default: 0
-      selector:
-        number:
-          min: -5.0
-          max: 0.0
-          step: 0.1
-          unit_of_measurement: "°"
-          mode: slider
+        temp_gap:
+          name: Hysterese
+          description: Puffer in Grad — verhindert zu häufiges Schalten.
+          default: 1.0
+          selector:
+            number:
+              min: 0.0
+              max: 5.0
+              step: 0.1
+              unit_of_measurement: "°"
+              mode: slider
+
+        temp_off_offset:
+          name: Ausschalt-Offset
+          description: >
+            Negativer Offset auf die Ausschalt-Temperatur.
+            0 = Fan schaltet genau am Schwellwert aus.
+          default: 0
+          selector:
+            number:
+              min: -5.0
+              max: 0.0
+              step: 0.1
+              unit_of_measurement: "°"
+              mode: slider
 
     # ── Kühlen-Profil ────────────────────────────────────────────────────────
-    cool_enabled:
-      name: 🧊 Kühlen aktivieren
-      default: true
-      selector:
-        boolean: {}
+    cool_section:
+      name: 🧊 Kühlen
+      icon: mdi:snowflake
+      collapsed: true
+      input:
+        cool_enabled:
+          name: Kühlen aktivieren
+          default: true
+          selector:
+            boolean: {}
 
-    cool_temp_min:
-      name: Kühlen – Temperatur für minimale Speed
-      default: 23
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        cool_temp_min:
+          name: Temperatur für minimale Speed
+          default: 23
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
-    cool_temp_max:
-      name: Kühlen – Temperatur für maximale Speed
-      default: 30
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        cool_temp_max:
+          name: Temperatur für maximale Speed
+          default: 30
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
-    cool_temp_off:
-      name: Kühlen – Ausschalt-Temperatur
-      description: Unter dieser Temperatur wird der Fan ausgeschaltet.
-      default: 22
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        cool_temp_off:
+          name: Ausschalt-Temperatur
+          description: Unter dieser Temperatur wird der Fan ausgeschaltet.
+          default: 22
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
     # ── Heizen-Profil ────────────────────────────────────────────────────────
-    heat_enabled:
-      name: 🔥 Heizen aktivieren
-      default: false
-      selector:
-        boolean: {}
+    heat_section:
+      name: 🔥 Heizen
+      icon: mdi:fire
+      collapsed: true
+      input:
+        heat_enabled:
+          name: Heizen aktivieren
+          default: false
+          selector:
+            boolean: {}
 
-    heat_temp_max:
-      name: Heizen – Temperatur für minimale Speed
-      description: Oberhalb → Fan auf Minimum.
-      default: 21
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        heat_temp_max:
+          name: Temperatur für minimale Speed
+          description: Oberhalb → Fan auf Minimum.
+          default: 21
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
-    heat_temp_min:
-      name: Heizen – Temperatur für maximale Speed
-      description: Darunter → Fan auf Maximum.
-      default: 16
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        heat_temp_min:
+          name: Temperatur für maximale Speed
+          description: Darunter → Fan auf Maximum.
+          default: 16
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
-    heat_temp_off:
-      name: Heizen – Ausschalt-Temperatur
-      description: Über dieser Temperatur wird der Fan ausgeschaltet.
-      default: 22
-      selector:
-        number:
-          min: 10.0
-          max: 40.0
-          step: 0.5
-          unit_of_measurement: "°C"
-          mode: slider
+        heat_temp_off:
+          name: Ausschalt-Temperatur
+          description: Über dieser Temperatur wird der Fan ausgeschaltet.
+          default: 22
+          selector:
+            number:
+              min: 10.0
+              max: 40.0
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: slider
 
     # ── Allgemein ────────────────────────────────────────────────────────────
     update_interval:
       name: ⏱ Mindestzeit zwischen Anpassungen
-      default: 5
+      description: Delay in Minuten vor jeder Anpassung. 0 = sofort reagieren.
+      default: 0
       selector:
         number:
-          min: 1
+          min: 0
           max: 60
           step: 1
           unit_of_measurement: "min"
@@ -223,6 +404,7 @@ variables:
   temp_sensor: !input temp_sensor
   fan_entity: !input fan_entity
   control_mode: !input control_mode
+  main_entity: !input main_entity
 
   cool_enabled: !input cool_enabled
   cool_temp_min: !input cool_temp_min
@@ -241,10 +423,57 @@ variables:
   preset_min: !input preset_min
   preset_max: !input preset_max
 
+  hysteresis_enabled: !input hysteresis_enabled
   temp_gap: !input temp_gap
   temp_off_offset: !input temp_off_offset
+  update_interval: !input update_interval
+
+  pm1t: !input preset_m1_temp
+  pm1v: !input preset_m1_val
+  pm2t: !input preset_m2_temp
+  pm2v: !input preset_m2_val
+  pm3t: !input preset_m3_temp
+  pm3v: !input preset_m3_val
+  pm4t: !input preset_m4_temp
+  pm4v: !input preset_m4_val
+  pm5t: !input preset_m5_temp
+  pm5v: !input preset_m5_val
+  pm6t: !input preset_m6_temp
+  pm6v: !input preset_m6_val
+
+  cm1t: !input pct_m1_temp
+  cm1v: !input pct_m1_val
+  cm2t: !input pct_m2_temp
+  cm2v: !input pct_m2_val
+  cm3t: !input pct_m3_temp
+  cm3v: !input pct_m3_val
+  cm4t: !input pct_m4_temp
+  cm4v: !input pct_m4_val
+  cm5t: !input pct_m5_temp
+  cm5v: !input pct_m5_val
+  cm6t: !input pct_m6_temp
+  cm6v: !input pct_m6_val
 
   current_temp: "{{ states(temp_sensor) | float(0) }}"
+
+  effective_gap: "{{ temp_gap if hysteresis_enabled else 0 }}"
+  effective_off_offset: "{{ temp_off_offset if hysteresis_enabled else 0 }}"
+
+  main_state: >
+    {% if main_entity != none and main_entity != '' %}
+      {{ states(main_entity) }}
+    {% else %}
+      active
+    {% endif %}
+
+  main_active: "{{ main_state not in ['off', 'unavailable', 'unknown'] }}"
+
+  climate_mode: >
+    {% if main_entity != none and main_entity != '' and main_entity.startswith('climate.') %}
+      {{ main_state }}
+    {% else %}
+      none
+    {% endif %}
 
   preset_array: "{{ preset_ordered_list.split(',') | map('trim') | list }}"
   idx_min: >
@@ -254,15 +483,24 @@ variables:
     {% set arr = preset_array %}
     {{ arr.index(preset_max) if preset_max in arr else (arr | length) - 1 }}
 
-  # Aktives Profil — Hysterese wird auf off-Schwellwert angewendet
   active_profile: >
-    {% set t = current_temp %}
-    {% if cool_enabled and t >= (cool_temp_off + temp_off_offset + temp_gap) %}
-      cool
-    {% elif heat_enabled and t <= (heat_temp_off - temp_off_offset - temp_gap) %}
-      heat
-    {% else %}
+    {% if not main_active %}
       off
+    {% elif climate_mode == 'cool' %}
+      cool
+    {% elif climate_mode == 'heat' %}
+      heat
+    {% elif climate_mode not in ['none', 'off', ''] %}
+      cool
+    {% else %}
+      {% set t = current_temp %}
+      {% if cool_enabled and t >= (cool_temp_off + effective_off_offset + effective_gap) %}
+        cool
+      {% elif heat_enabled and t <= (heat_temp_off - effective_off_offset - effective_gap) %}
+        heat
+      {% else %}
+        off
+      {% endif %}
     {% endif %}
 
   ratio: >
@@ -276,13 +514,49 @@ variables:
       0
     {% endif %}
 
-  target_pct: >
-    {{ (pct_min + ratio * (pct_max - pct_min)) | round(0) | int }}
+  manual_preset: >
+    {% set t = current_temp %}
+    {% set ns = namespace(result='') %}
+    {% set pairs = [
+      (pm1t, pm1v), (pm2t, pm2v), (pm3t, pm3v),
+      (pm4t, pm4v), (pm5t, pm5v), (pm6t, pm6v)
+    ] %}
+    {% for pair in pairs | sort(attribute='0') %}
+      {% if pair[0] != '' and pair[1] != '' and t >= pair[0] | float %}
+        {% set ns.result = pair[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.result }}
+
+  manual_pct: >
+    {% set t = current_temp %}
+    {% set ns = namespace(result='') %}
+    {% set pairs = [
+      (cm1t, cm1v), (cm2t, cm2v), (cm3t, cm3v),
+      (cm4t, cm4v), (cm5t, cm5v), (cm6t, cm6v)
+    ] %}
+    {% for pair in pairs | sort(attribute='0') %}
+      {% if pair[0] != '' and pair[1] != '' and t >= pair[0] | float %}
+        {% set ns.result = pair[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.result }}
 
   target_preset: >
-    {% set arr = preset_array %}
-    {% set idx = (idx_min + ratio * (idx_max - idx_min)) | round(0) | int %}
-    {{ arr[idx] }}
+    {% if manual_preset != '' %}
+      {{ manual_preset }}
+    {% else %}
+      {% set arr = preset_array %}
+      {% set idx = (idx_min + ratio * (idx_max - idx_min)) | round(0) | int %}
+      {{ arr[idx] }}
+    {% endif %}
+
+  target_pct: >
+    {% if manual_pct != '' %}
+      {{ manual_pct | int }}
+    {% else %}
+      {{ (pct_min + ratio * (pct_max - pct_min)) | round(0) | int }}
+    {% endif %}
 
   needs_change: >
     {% if active_profile == 'off' %}
@@ -303,6 +577,9 @@ triggers:
   - trigger: state
     entity_id: !input fan_control
     to: "off"
+  - trigger: state
+    entity_id: !input main_entity
+    to: "off"
 
 # ── Conditions ────────────────────────────────────────────────────────────────
 conditions:
@@ -314,8 +591,12 @@ conditions:
 
 # ── Actions ───────────────────────────────────────────────────────────────────
 actions:
-  - delay:
-      minutes: !input update_interval
+  - if:
+      - condition: template
+        value_template: "{{ update_interval > 0 }}"
+    then:
+      - delay:
+          minutes: "{{ update_interval }}"
   - choose:
       - conditions:
           - condition: template
