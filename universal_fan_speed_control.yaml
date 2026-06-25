@@ -392,6 +392,9 @@ blueprint:
       name: ⚡ Geschwindigkeitsänderung
       icon: mdi:speedometer
       collapsed: true
+      description: >
+        Diese Einstellungen gelten nur für den Percentage-Modus.
+        Im Preset-Modus wird immer direkt auf den Ziel-Preset geschaltet.
       input:
         auto_turn_on_enabled:
           name: Automatisch einschalten
@@ -402,11 +405,21 @@ blueprint:
           selector:
             boolean: {}
 
+        speed_limits_enabled:
+          name: Änderungsbegrenzung aktivieren (nur Percentage)
+          description: >
+            Aktiviert minimale und maximale Änderung pro Schritt.
+            Deaktiviert = Fan springt sofort auf Zielwert.
+          default: false
+          selector:
+            boolean: {}
+
         change_threshold:
           name: Minimale Änderung (%)
           description: >
             Minimale Differenz zwischen aktueller und Ziel-Speed bevor
             eine Anpassung vorgenommen wird. Verhindert Mini-Korrekturen.
+            Nur aktiv wenn Änderungsbegrenzung aktiviert ist.
           default: 1
           selector:
             number:
@@ -420,7 +433,8 @@ blueprint:
           name: Maximale Änderung pro Schritt (%)
           description: >
             Begrenzt wie stark der Fan in einem Schritt springen darf.
-            Verhindert abrupte Sprünge. 100 = keine Begrenzung.
+            Verhindert abrupte Sprünge.
+            Nur aktiv wenn Änderungsbegrenzung aktiviert ist.
           default: 50
           selector:
             number:
@@ -473,6 +487,7 @@ variables:
   update_interval: !input update_interval
 
   auto_turn_on_enabled: !input auto_turn_on_enabled
+  speed_limits_enabled: !input speed_limits_enabled
   change_threshold: !input change_threshold
   max_change: !input max_change
 
@@ -604,7 +619,7 @@ variables:
       {{ arr[idx] }}
     {% endif %}
 
-  # Ziel-Percentage mit max_change Begrenzung
+  # Ziel-Percentage mit optionaler max_change Begrenzung
   raw_target_pct: >
     {% if manual_pct != '' %}
       {{ manual_pct | int }}
@@ -615,12 +630,16 @@ variables:
   current_pct: "{{ state_attr(fan_entity, 'percentage') | int(0) }}"
 
   target_pct: >
-    {% set diff = raw_target_pct - current_pct %}
-    {% if diff | abs > max_change %}
-      {% if diff > 0 %}
-        {{ current_pct + max_change }}
+    {% if speed_limits_enabled %}
+      {% set diff = raw_target_pct - current_pct %}
+      {% if diff | abs > max_change %}
+        {% if diff > 0 %}
+          {{ current_pct + max_change }}
+        {% else %}
+          {{ current_pct - max_change }}
+        {% endif %}
       {% else %}
-        {{ current_pct - max_change }}
+        {{ raw_target_pct }}
       {% endif %}
     {% else %}
       {{ raw_target_pct }}
@@ -630,7 +649,11 @@ variables:
     {% if active_profile == 'off' %}
       {{ states(fan_entity) == 'on' }}
     {% elif control_mode == 'percentage' %}
-      {{ (current_pct - target_pct) | abs >= change_threshold }}
+      {% if speed_limits_enabled %}
+        {{ (current_pct - target_pct) | abs >= change_threshold }}
+      {% else %}
+        {{ current_pct != target_pct }}
+      {% endif %}
     {% else %}
       {{ state_attr(fan_entity, 'preset_mode') != target_preset }}
     {% endif %}
