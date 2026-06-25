@@ -388,6 +388,15 @@ blueprint:
               unit_of_measurement: "°C"
               mode: slider
 
+    auto_turn_on_enabled:
+      name: 🔄 Automatisch einschalten
+      description: >
+        Fan schaltet automatisch wieder ein wenn die Temperatur den
+        Ausschalt-Schwellwert wieder überschreitet. Gilt für Percentage- und Preset-Modus.
+      default: true
+      selector:
+        boolean: {}
+
     # ── Geschwindigkeitsänderung ─────────────────────────────────────────────
     speed_change_section:
       name: ⚡ Geschwindigkeitsänderung
@@ -397,15 +406,6 @@ blueprint:
         Diese Einstellungen gelten nur für den Percentage-Modus.
         Im Preset-Modus wird immer direkt auf den Ziel-Preset geschaltet.
       input:
-        auto_turn_on_enabled:
-          name: Automatisch einschalten
-          description: >
-            Fan schaltet automatisch wieder ein wenn die Temperatur den
-            Ausschalt-Schwellwert wieder überschreitet.
-          default: true
-          selector:
-            boolean: {}
-
         speed_limits_enabled:
           name: Änderungsbegrenzung aktivieren (nur Percentage)
           description: >
