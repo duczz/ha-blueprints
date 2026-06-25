@@ -5,6 +5,7 @@ blueprint:
     Unterstützt separate Profile für Kühlen und Heizen, optionale Haupt-Entity,
     6 manuelle Temperaturstufen, Unavailability-Handling und einen Enable/Disable-Toggle.
   domain: automation
+  source_url: https://raw.githubusercontent.com/duczz/ha-blueprints/main/universal_fan_speed_control.yaml
   homeassistant:
     min_version: 2024.6.0
   input:
