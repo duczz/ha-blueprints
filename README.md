@@ -12,14 +12,15 @@ A Home Assistant Blueprint that controls fan speed based on room temperature —
 - **Universal**: works with any `fan.*` entity that supports `percentage` or `preset_mode`
 - **Linear interpolation**: fan speed scales smoothly between min and max temperature
 - **Dual mode**: separate temperature profiles for cooling and heating
-- **Hysteresis**: configurable dead-band to prevent rapid on/off cycling
+- **Hysteresis**: stateful dead-band — a running fan stays on until the temperature leaves the hold band
 - **Off offset**: separate threshold for fan shutdown to avoid flapping
+- **Optional main entity**: e.g. `climate.*` — fan only runs while it is active; climate mode selects the profile
 - **Enable/Disable toggle**: `input_boolean` helper to quickly disable the automation (e.g. away mode, sleep mode)
-- **Restart mode**: new temperature changes immediately re-evaluate fan speed
+- **Always current values**: re-evaluates on temperature, toggle, main entity changes, Home Assistant start and once per minute; rate limiting never applies stale values
 
 ### Requirements
 
-- Home Assistant 2024.6.0 or newer
+- Home Assistant 2024.10.0 or newer
 - An `input_boolean` helper for the enable/disable toggle (create under **Settings → Helpers**)
 
 ### Inputs
@@ -31,6 +32,15 @@ A Home Assistant Blueprint that controls fan speed based on room temperature —
 | 🌡 Temperatursensor | Temperature sensor entity |
 | 💨 Fan Entity | The fan entity to control |
 | 🔘 Enable/Disable Toggle | `input_boolean` to enable or disable the automation |
+
+**Optional**
+
+| Input | Description |
+|---|---|
+| 🏠 Haupt-Entity | e.g. `climate.*`. Fan only runs while it is not `off`; with `climate.*` the mode (cool/heat) selects the profile and the off-temperature/hysteresis do not apply |
+| 🔄 Automatisch einschalten | Default `true`. Turns a stopped fan on again once the on-threshold (`off ± gap`) is reached |
+| ⚡ Änderungsbegrenzung (nur Percentage) | `speed_limits_enabled`, minimum change and maximum change per step |
+| Manuelle Stufen 1–6 | Temperature (`26.5` or `26,5`) → fixed preset/percentage; highest matching step wins |
 
 **Steuerungsmodus (Control Mode)**
 
@@ -46,7 +56,8 @@ A Home Assistant Blueprint that controls fan speed based on room temperature —
 | Input | Default | Description |
 |---|---|---|
 | Hysterese | 1.0° | Dead-band around the threshold — prevents rapid cycling |
-| Ausschalt-Offset | 0° | Negative offset for the fan-off temperature (0 = same as on-threshold) |
+| Hysterese aktivieren | `true` | If disabled, Hysterese and Ausschalt-Offset are ignored |
+| Ausschalt-Offset | 0° | Offset (−5…0) on the fan-off temperature: a running fan stays on until the temperature passes `off + offset` (cooling) / `off − offset` (heating). 0 = off exactly at the off-temperature |
 
 **Kühlen (Cooling Profile)**
 
@@ -70,7 +81,7 @@ A Home Assistant Blueprint that controls fan speed based on room temperature —
 
 | Input | Default | Description |
 |---|---|---|
-| ⏱ Mindestzeit zwischen Anpassungen | 5 min | Minimum delay between speed adjustments |
+| ⏱ Mindestzeit zwischen Anpassungen | 0 min | Minimum time between two adjustments. The latest value is always applied; turning the fan off is always immediate |
 
 ### How It Works
 
@@ -84,7 +95,10 @@ The blueprint calculates a `ratio` (0.0–1.0) based on how far the current temp
 | 26.5°C | ~60% |
 | ≥ 30°C | 100% (maximum) |
 
-**Hysteresis** is applied to the off-threshold: the fan only turns on once the temperature exceeds `cool_temp_off + temp_gap`, and only turns off once it drops below `cool_temp_off + temp_off_offset`.
+**Hysteresis** (cooling): the fan turns on once the temperature reaches `cool_temp_off + temp_gap` and stays on until it drops below `cool_temp_off + temp_off_offset`.
+Heating is mirrored: on at `heat_temp_off − temp_gap`, off once the temperature rises above `heat_temp_off − temp_off_offset`.
+
+Example with defaults (`cool_temp_off = 22°C`, `temp_gap = 1.0`, `temp_off_offset = 0`): on at 23.0°C, stays on down to 22.0°C, off at 21.9°C.
 
 ### Example: Preset Fan (AC unit)
 

@@ -7,7 +7,7 @@ blueprint:
   domain: automation
   source_url: https://raw.githubusercontent.com/duczz/ha-blueprints/main/universal_fan_speed_control.yaml
   homeassistant:
-    min_version: 2024.6.0
+    min_version: 2024.10.0
   input:
 
     # ── Entities ────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ blueprint:
         Optionale übergeordnete Entity (z.B. climate.*).
         Wenn angegeben, läuft der Fan nur wenn diese Entity aktiv ist (nicht 'off').
         Bei climate.* wird der Modus (cool/heat) automatisch für das Profil verwendet.
-      default:
+      default: []
       selector:
         entity: {}
 
@@ -64,7 +64,7 @@ blueprint:
       icon: mdi:format-list-bulleted
       collapsed: true
       description: >
-        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5).
+        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5 oder 26,5).
         Logik: ab dieser Temperatur → Stufe aktiv (>=). Höchste passende Stufe gewinnt.
         Leer lassen = automatische lineare Berechnung zwischen min/max Temperatur.
       input:
@@ -161,7 +161,7 @@ blueprint:
       icon: mdi:percent
       collapsed: true
       description: >
-        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5).
+        Manuelle Stufen sind optional. Nur Zahl als Temperatur eingeben (z.B. 26.5 oder 26,5).
         Logik: ab dieser Temperatur → Stufe aktiv (>=). Höchste passende Stufe gewinnt.
         Leer lassen = automatische lineare Berechnung zwischen min/max Temperatur.
       input:
@@ -270,7 +270,10 @@ blueprint:
 
         temp_gap:
           name: Hysterese
-          description: Puffer in Grad — verhindert zu häufiges Schalten.
+          description: >
+            Puffer in Grad — verhindert zu häufiges Schalten.
+            Kühlen: Einschalten ab Ausschalt-Temperatur + Hysterese.
+            Heizen: Einschalten ab Ausschalt-Temperatur − Hysterese.
           default: 1.0
           selector:
             number:
@@ -283,8 +286,9 @@ blueprint:
         temp_off_offset:
           name: Ausschalt-Offset
           description: >
-            Negativer Offset auf die Ausschalt-Temperatur.
-            0 = Fan schaltet genau am Schwellwert aus.
+            Offset auf die Ausschalt-Temperatur. Ein laufender Fan bleibt an, bis
+            die Temperatur die Ausschalt-Temperatur + Offset (Kühlen) bzw.
+            − Offset (Heizen) verlässt. 0 = Fan schaltet genau am Schwellwert aus.
           default: 0
           selector:
             number:
@@ -391,8 +395,8 @@ blueprint:
     auto_turn_on_enabled:
       name: 🔄 Automatisch einschalten
       description: >
-        Fan schaltet automatisch wieder ein wenn die Temperatur den
-        Ausschalt-Schwellwert wieder überschreitet. Gilt für Percentage- und Preset-Modus.
+        Fan schaltet automatisch wieder ein wenn die Temperatur die Einschalt-Schwelle
+        (Ausschalt-Temperatur ± Hysterese) erreicht. Gilt für Percentage- und Preset-Modus.
       default: true
       selector:
         boolean: {}
@@ -448,7 +452,9 @@ blueprint:
     # ── Allgemein ────────────────────────────────────────────────────────────
     update_interval:
       name: ⏱ Mindestzeit zwischen Anpassungen
-      description: Delay in Minuten vor jeder Anpassung. 0 = sofort reagieren.
+      description: >
+        Mindestabstand in Minuten zwischen zwei Anpassungen. Angewendet wird immer
+        der aktuelle Wert. Ausschalten erfolgt immer sofort. 0 = sofort reagieren.
       default: 0
       selector:
         number:
@@ -520,7 +526,7 @@ variables:
 
   # Sensor-Unavailability prüfen
   sensor_unavailable: >
-    {{ states(temp_sensor) in ['unavailable', 'unknown', 'none'] }}
+    {{ not is_number(states(temp_sensor)) }}
 
   current_temp: >
     {{ states(temp_sensor) | float(0) if not sensor_unavailable else none }}
@@ -529,7 +535,7 @@ variables:
   effective_off_offset: "{{ temp_off_offset if hysteresis_enabled else 0 }}"
 
   main_state: >
-    {% if main_entity != none and main_entity != '' %}
+    {% if main_entity %}
       {{ states(main_entity) }}
     {% else %}
       active
@@ -538,7 +544,7 @@ variables:
   main_active: "{{ main_state not in ['off', 'unavailable', 'unknown'] }}"
 
   climate_mode: >
-    {% if main_entity != none and main_entity != '' and main_entity.startswith('climate.') %}
+    {% if main_entity and main_entity is string and main_entity.startswith('climate.') %}
       {{ main_state }}
     {% else %}
       none
@@ -563,9 +569,12 @@ variables:
       cool
     {% else %}
       {% set t = current_temp %}
-      {% if cool_enabled and t >= (cool_temp_off + effective_off_offset + effective_gap) %}
+      {% set running = states(fan_entity) == 'on' %}
+      {% if cool_enabled and (t >= cool_temp_off + effective_gap
+            or (running and t >= cool_temp_off + effective_off_offset)) %}
         cool
-      {% elif heat_enabled and t <= (heat_temp_off - effective_off_offset - effective_gap) %}
+      {% elif heat_enabled and (t <= heat_temp_off - effective_gap
+            or (running and t <= heat_temp_off - effective_off_offset)) %}
         heat
       {% else %}
         off
@@ -575,23 +584,28 @@ variables:
   ratio: >
     {% if active_profile == 'cool' %}
       {% set t = [[current_temp, cool_temp_min] | max, cool_temp_max] | min %}
-      {{ (t - cool_temp_min) / ((cool_temp_max - cool_temp_min) | float(1)) }}
+      {% set span = cool_temp_max - cool_temp_min %}
+      {{ ((t - cool_temp_min) / span) if span != 0 else (1 if t >= cool_temp_max else 0) }}
     {% elif active_profile == 'heat' %}
       {% set t = [[current_temp, heat_temp_min] | max, heat_temp_max] | min %}
-      {{ 1 - (t - heat_temp_min) / ((heat_temp_max - heat_temp_min) | float(1)) }}
+      {% set span = heat_temp_max - heat_temp_min %}
+      {{ (1 - (t - heat_temp_min) / span) if span != 0 else (1 if t <= heat_temp_min else 0) }}
     {% else %}
       0
     {% endif %}
 
   manual_preset: >
     {% set t = current_temp %}
-    {% set ns = namespace(result='') %}
+    {% set ns = namespace(result='', best=none) %}
     {% set pairs = [
       (pm1t, pm1v), (pm2t, pm2v), (pm3t, pm3v),
       (pm4t, pm4v), (pm5t, pm5v), (pm6t, pm6v)
     ] %}
-    {% for pair in pairs | sort(attribute='0') %}
-      {% if pair[0] != '' and pair[1] != '' and t >= pair[0] | float %}
+    {% for pair in pairs %}
+      {% set th = pair[0] | string | replace(',', '.') | trim %}
+      {% if t is not none and is_number(th) and pair[1] | string | trim != ''
+            and t >= th | float and (ns.best is none or th | float >= ns.best) %}
+        {% set ns.best = th | float %}
         {% set ns.result = pair[1] %}
       {% endif %}
     {% endfor %}
@@ -599,13 +613,16 @@ variables:
 
   manual_pct: >
     {% set t = current_temp %}
-    {% set ns = namespace(result='') %}
+    {% set ns = namespace(result='', best=none) %}
     {% set pairs = [
       (cm1t, cm1v), (cm2t, cm2v), (cm3t, cm3v),
       (cm4t, cm4v), (cm5t, cm5v), (cm6t, cm6v)
     ] %}
-    {% for pair in pairs | sort(attribute='0') %}
-      {% if pair[0] != '' and pair[1] != '' and t >= pair[0] | float %}
+    {% for pair in pairs %}
+      {% set th = pair[0] | string | replace(',', '.') | trim %}
+      {% if t is not none and is_number(th) and pair[1] | string | trim != ''
+            and t >= th | float and (ns.best is none or th | float >= ns.best) %}
+        {% set ns.best = th | float %}
         {% set ns.result = pair[1] %}
       {% endif %}
     {% endfor %}
@@ -631,13 +648,14 @@ variables:
   current_pct: "{{ state_attr(fan_entity, 'percentage') | int(0) }}"
 
   target_pct: >
+    {% set lo = [pct_min, pct_max] | min %}
     {% if speed_limits_enabled %}
       {% set diff = raw_target_pct - current_pct %}
       {% if diff | abs > max_change %}
         {% if diff > 0 %}
-          {{ current_pct + max_change }}
+          {{ [current_pct + max_change, lo] | max }}
         {% else %}
-          {{ current_pct - max_change }}
+          {{ [current_pct - max_change, lo] | max }}
         {% endif %}
       {% else %}
         {{ raw_target_pct }}
@@ -651,7 +669,7 @@ variables:
       {{ states(fan_entity) == 'on' }}
     {% elif control_mode == 'percentage' %}
       {% if speed_limits_enabled %}
-        {{ (current_pct - target_pct) | abs >= change_threshold }}
+        {{ (current_pct - target_pct) | abs >= [change_threshold, max_change] | min }}
       {% else %}
         {{ current_pct != target_pct }}
       {% endif %}
@@ -671,10 +689,13 @@ triggers:
     id: fan_turned_on
   - trigger: state
     entity_id: !input fan_control
-    to: "off"
+    to: "on"
   - trigger: state
     entity_id: !input main_entity
-    to: "off"
+  - trigger: homeassistant
+    event: start
+  - trigger: time_pattern
+    minutes: "/1"
 
 # ── Conditions ────────────────────────────────────────────────────────────────
 conditions:
@@ -687,15 +708,18 @@ conditions:
   - condition: template
     alias: Änderung nötig oder Fan soll ausschalten
     value_template: "{{ needs_change }}"
+  - condition: template
+    alias: Fan aus und Auto-Einschalten deaktiviert → nichts zu tun
+    value_template: "{{ not (fan_is_off and not auto_turn_on_enabled and active_profile != 'off') }}"
+  - condition: template
+    alias: Mindestabstand (Ausschalten immer sofort)
+    value_template: >
+      {{ active_profile == 'off' or update_interval == 0
+         or this.attributes.last_triggered is none
+         or now() - this.attributes.last_triggered >= timedelta(minutes=update_interval) }}
 
 # ── Actions ───────────────────────────────────────────────────────────────────
 actions:
-  - if:
-      - condition: template
-        value_template: "{{ update_interval > 0 }}"
-    then:
-      - delay:
-          minutes: "{{ update_interval }}"
   - choose:
       # Fan ausschalten
       - conditions:
